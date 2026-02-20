@@ -7,6 +7,7 @@ dependencies = [
     "torch>=2.0.0",
     "torchaudio",
     "numpy",
+    "tqdm",
     "pandas",
     "pyyaml",
     "librosa",

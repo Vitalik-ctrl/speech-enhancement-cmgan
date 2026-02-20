@@ -10,9 +10,9 @@ paths:
   noise_data:
     - "data/additive_noises/Cafe_1.wav"
     - "data/additive_noises/CAR-NOISE.wav"
-  manifest_dir: "manifests"
+  manifest_dir: "manifest"
 
 audio:
   sample_rate: 16000
   segment_seconds: 2.0
-  target_snrs: [-5, 0, 5, 10, 15, 20]
+  target_snr: [-5, 0, 5, 10, 15, 20]
