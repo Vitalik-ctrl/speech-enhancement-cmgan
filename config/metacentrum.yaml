@@ -16,3 +16,8 @@ audio:
   sample_rate: 16000
   segment_seconds: 2.0
   target_snr: [-5, 0, 5, 10, 15, 20]
+
+training:
+  batch_size: 4
+  num_workers: 4
+  pin_memory: true
