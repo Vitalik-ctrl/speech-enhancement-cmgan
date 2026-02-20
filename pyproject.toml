@@ -6,6 +6,7 @@ authors = [{name = "Vitalii Varhanik", email = "varhavit@fel.cvut.cz"}]
 dependencies = [
     "torch>=2.0.0",
     "torchaudio",
+    "einops",
     "numpy",
     "tqdm",
     "pandas",
