@@ -32,7 +32,7 @@ def batch_pesq(clean, noisy):
     if -1 in pesq_score:
         return None
     pesq_score = (pesq_score - 1) / 3.5
-    return torch.FloatTensor(pesq_score).to("cuda")
+    return torch.FloatTensor(pesq_score).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
 
 class Discriminator(nn.Module):
