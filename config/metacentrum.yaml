@@ -4,11 +4,11 @@ system:
   workspace: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit"
 
 paths:
-  sph2pipe: "workspace/tools/sph2pipe/sph2pipe"
+  sph2pipe: "tools/sph2pipe/sph2pipe"
   clean_data:
     - "data/WSJ/wsj1_CDset/disk1/wsj1/si_tr_s"
   noise_data:
-    - "data/additive_noises/QUT_NOISES/CAFE_CAFE_1"
+    - "data/additive_noises/Cafe_1.wav"
     - "data/additive_noises/CAR-NOISE.wav"
   manifest_dir: "manifests"
 
