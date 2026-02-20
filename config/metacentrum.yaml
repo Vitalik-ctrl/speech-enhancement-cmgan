@@ -14,6 +14,8 @@ paths:
 
 audio:
   sample_rate: 16000
+  n_fft: 400
+  hop_length: 100
   segment_seconds: 2.0
   target_snr: [-5, 0, 5, 10, 15, 20]
 
@@ -21,3 +23,10 @@ training:
   batch_size: 4
   num_workers: 4
   pin_memory: true
+  loss_weights: [0.1, 0.9, 0.2, 0.05]
+  epochs: 120
+  decay_epochs: 30
+  init_lr: 5e-4
+
+model:
+  num_channel: 64
