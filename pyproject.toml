@@ -1,0 +1,19 @@
+[project]
+name = "speech-enhancement-cmgan"
+version = "0.1.0"
+description = "CMGAN for Speech Enhancement - Bachelor Thesis"
+authors = [{name = "Vitalii Varhanik", email = "varhavit@fel.cvut.cz"}]
+dependencies = [
+    "torch>=2.0.0",
+    "torchaudio",
+    "numpy",
+    "pandas",
+    "pyyaml",
+    "librosa",
+    "pesq",
+    "pystoi",
+    "soundfile",
+]
+
+[tool.setuptools]
+packages = ["src"]

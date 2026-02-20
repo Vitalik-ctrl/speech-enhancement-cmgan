@@ -1,0 +1,18 @@
+system:
+  root: "/auto/projects-du-praha/CTU_Speech_Lab"
+  scratch: "/auto/projects-du-praha/CTU_Speech_Lab/scratch/varhavit"
+  workspace: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit"
+
+paths:
+  sph2pipe: "workspace/tools/sph2pipe/sph2pipe"
+  clean_data:
+    - "data/WSJ/wsj1_CDset/disk1/wsj1/si_tr_s"
+  noise_data:
+    - "data/additive_noises/QUT_NOISES/CAFE_CAFE_1"
+    - "data/additive_noises/CAR-NOISE.wav"
+  manifest_dir: "manifests"
+
+audio:
+  sample_rate: 16000
+  segment_seconds: 2.0
+  target_snrs: [-5, 0, 5, 10, 15, 20]
