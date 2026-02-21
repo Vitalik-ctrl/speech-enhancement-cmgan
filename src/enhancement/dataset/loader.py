@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 
-from audio import AudioManager
+from .audio import AudioManager
 
 logger = logging.getLogger(__name__)
 

@@ -33,7 +33,7 @@ class ModelTrainer:
             in_channel=2
         ).to(self.device)
 
-        init_lr = config["training"]["init_lr"]
+        init_lr = float(config["training"]["init_lr"])
         self.optimizer_generator = torch.optim.AdamW(self.model.parameters(), lr=init_lr)
         self.optimizer_discriminator = torch.optim.AdamW(self.discriminator.parameters(), lr=2 * init_lr)
 
@@ -45,33 +45,30 @@ class ModelTrainer:
         os.makedirs(self.save_dir, exist_ok=True)
 
     def forward_generator_step(self, clean, noisy):
-        # 1. Normalization
         c = torch.sqrt(noisy.size(-1) / torch.sum((noisy ** 2.0), dim=-1))
         noisy, clean = torch.transpose(noisy, 0, 1), torch.transpose(clean, 0, 1)
         noisy, clean = torch.transpose(noisy * c, 0, 1), torch.transpose(clean * c, 0, 1)
 
         window = torch.hamming_window(self.n_fft).to(self.device)
 
-        # 2. STFT -> (Batch, Freq, Time)
+        # STFT -> (Batch, Freq, Time)
         noisy_spec = torch.stft(noisy, self.n_fft, self.hop, window=window, onesided=True, return_complex=True)
         clean_spec = torch.stft(clean, self.n_fft, self.hop, window=window, onesided=True, return_complex=True)
 
-        # 3. Prepare for power_compress (Needs Real/Imag at the end: (B, F, T, 2))
+        # Prepare for power_compress (Needs Real/Imag at the end: (B, F, T, 2))
         noisy_spec = torch.view_as_real(noisy_spec)
         clean_spec = torch.view_as_real(clean_spec)
 
-        # 4. Power Compress -> Returns (B, 2, F, T)
+        # Power Compress -> Returns (B, 2, F, T)
         noisy_spec = power_compress(noisy_spec)
         clean_spec = power_compress(clean_spec)
 
-        # 5. Model expects (B, 2, Time, Freq)
         # Permute (B, 2, F, T) -> (B, 2, T, F)
         noisy_spec = noisy_spec.permute(0, 1, 3, 2)
 
         clean_real = clean_spec[:, 0, :, :].unsqueeze(1)  # (B, 1, F, T)
         clean_imag = clean_spec[:, 1, :, :].unsqueeze(1)  # (B, 1, F, T)
 
-        # 6. Generator Forward Pass
         est_real, est_imag = self.model(noisy_spec)  # Returns (B, 1, T, F)
 
         # Calculate Magnitudes (B, 1, T, F)
@@ -79,38 +76,22 @@ class ModelTrainer:
         # Important: Transpose clean_mag to match (B, 1, T, F)
         clean_mag = torch.sqrt(clean_real ** 2 + clean_imag ** 2).transpose(2, 3)
 
-        # 7. Reconstruction
         est_spec_uncompress = power_uncompress(est_real, est_imag).squeeze(1)  # (B, 2, T, F)
 
         # Convert back to complex for istft: (B, T, F)
         est_spec_complex = torch.complex(est_spec_uncompress[:, 0], est_spec_uncompress[:, 1])
 
-        # 7. Reconstruction
-        # Original power_uncompress returns (B, 1, T, F, 2) based on your current inputs
+        # Original power_uncompress returns (B, 1, T, F, 2)
         est_spec_uncompress = power_uncompress(est_real, est_imag)
 
-        # We need to slice the LAST dimension to get Real and Imaginary
         # Shape before slice: (B, 1, T, F, 2)
-        # We squeeze(1) to remove the unnecessary '1' channel
         est_spec_uncompress = est_spec_uncompress.squeeze(1)  # Result: (B, T, F, 2)
 
-        # Slice the LAST index (0 and 1) to build the complex tensor
         est_spec_complex = torch.complex(
             est_spec_uncompress[..., 0],
             est_spec_uncompress[..., 1]
         )  # Result: (B, T, F)
 
-        # istft expects (Batch, Freq, Time)
-        # Since we have (B, T, F), we transpose(1, 2)
-        est_audio = torch.istft(
-            est_spec_complex.transpose(1, 2),
-            self.n_fft,
-            self.hop,
-            window=window,
-            onesided=True
-        )
-
-        # istft expects (B, Freq, Time), so we transpose(1, 2)
         est_audio = torch.istft(est_spec_complex.transpose(1, 2), self.n_fft, self.hop, window=window, onesided=True)
 
         return {

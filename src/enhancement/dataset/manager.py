@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 import yaml
 
-from audio import AudioManager
+from .audio import AudioManager
 
 logger = logging.getLogger(__name__)
 
