@@ -1,7 +1,7 @@
 system:
-  root: "/auto/projects-du-praha/CTU_Speech_Lab"
-  scratch: "/auto/projects-du-praha/CTU_Speech_Lab/scratch/varhavit"
-  workspace: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit"
+  root: "/storage/projects/CTU_Speech_Lab"
+  scratch: "/storage/projects/CTU_Speech_Lab/scratch/varhavit"
+  workspace: "/storage/projects/CTU_Speech_Lab/workspace/varhavit"
 
 paths:
   sph2pipe: "tools/sph2pipe/sph2pipe"
@@ -11,6 +11,9 @@ paths:
     - "data/additive_noises/Cafe_1.wav"
     - "data/additive_noises/CAR-NOISE.wav"
   manifest_dir: "manifest"
+  train_manifest: "manifest/train_mini.csv"
+  eval_manifest: "manifest/train_mini.csv"
+  save_dir: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/speech-enhancement-cmgan/checkpoints"
 
 audio:
   sample_rate: 16000
@@ -20,12 +23,12 @@ audio:
   target_snr: [-5, 0, 5, 10, 15, 20]
 
 training:
-  batch_size: 4
-  num_workers: 4
+  batch_size: 16
+  num_workers: 2
   pin_memory: true
   loss_weights: [0.1, 0.9, 0.2, 0.05]
-  epochs: 120
-  decay_epochs: 30
+  epochs: 16
+  decay_epoch: 4
   init_lr: 5e-4
 
 model:
