@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 import torch
 import torch.nn.functional as F
@@ -153,6 +154,14 @@ class ModelTrainer:
     def train(self):
         epochs = self.config.get('training', {}).get('epochs', 120)
         log_interval = self.config.get('training', {}).get('log_interval', 100)
+
+        job_id = os.environ.get("PBS_JOBID", "").split(".")[0]
+
+        if not job_id:
+            job_id = time.strftime("run_%Y%m%d_%H%M%S")
+
+        self.save_dir = os.path.join(self.save_dir, job_id)
+        os.makedirs(self.save_dir, exist_ok=True)
 
         logger.info(f"Starting training for {epochs} epochs on {self.device}...")
 
