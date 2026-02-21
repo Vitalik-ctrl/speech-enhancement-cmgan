@@ -1,6 +1,14 @@
 
+# secretes and libs
 .env
 .venv/
 
+# python
 __pycache__/
 *.egg-info/
+
+# logs
+*.log
+*.o*
+*.e*
+/*.pbs-m1.metacentrum.cz/
