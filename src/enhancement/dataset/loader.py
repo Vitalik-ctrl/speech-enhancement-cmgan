@@ -41,24 +41,6 @@ class ModelDataset(Dataset):
             return np.pad(audio, (0, padding), 'constant')
         return audio
 
-    def mix_at_snr(self, clean: np.ndarray, noise: np.ndarray, snr_db: float) -> np.ndarray:
-        """Mixes clean and noise arrays at the exact SNR requested.
-        Imported from legacy make_noisy.py logic."""
-        if len(noise) < len(clean):
-            noise = np.tile(noise, int(np.ceil(len(clean) / len(noise))))
-        noise = noise[:len(clean)]
-
-        ps = np.mean(clean ** 2)
-        pn = np.mean(noise ** 2)
-
-        if ps == 0 or pn == 0:
-            return clean + noise
-
-        pn_target = ps / (10.0 ** (snr_db / 10.0))
-        noise = noise * np.sqrt(pn_target / (pn + 1e-12))
-
-        return clean + noise
-
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Loads the clean and noisy audio segments for the given index, applies necessary processing, and returns them as tensors."""
         row = self.dataframe.iloc[idx]
@@ -74,7 +56,7 @@ class ModelDataset(Dataset):
         target_samples = int(self.segment_seconds * target_sr)
         clean_segment = self.extract_random_segment(clean, target_samples)
 
-        noisy_segment = self.mix_at_snr(clean_segment, noise, snr_db)
+        noisy_segment = self.audio_manager.mix_at_snr(clean_segment, noise, snr_db)
 
         max_amp = np.max(np.abs(noisy_segment)) + 1e-9
         if max_amp > 1.0:
