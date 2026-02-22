@@ -14,6 +14,7 @@ paths:
   train_manifest: "manifest/train_mini.csv"
   eval_manifest: "manifest/train_mini.csv"
   save_dir: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/speech-enhancement-cmgan/checkpoints"
+  dnsmos_model: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/models/dnsmos_model.onnx"
 
 audio:
   sample_rate: 16000
@@ -24,7 +25,7 @@ audio:
 
 training:
   batch_size: 16
-  num_workers: 2
+  num_workers: 4
   pin_memory: true
   loss_weights: [0.1, 0.9, 0.2, 0.05]
   epochs: 16
@@ -33,3 +34,6 @@ training:
 
 model:
   num_channel: 64
+
+evaluation:
+  batch_limit: 5
