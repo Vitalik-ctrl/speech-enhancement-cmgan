@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 import yaml
 
-from .audio import AudioManager
+from audio import AudioManager
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     config_file = "config/metacentrum.yaml"
 
-    logger.info("--- Starting DatasetManager Test ---")
+    logger.info("--- Starting DatasetManager ---")
     try:
         manager = DatasetManager(config_path=config_file)
 
@@ -131,8 +131,8 @@ if __name__ == "__main__":
         noise_files = manager.get_noise_files()
         logger.info(f"Found {len(clean_files)} clean files and {len(noise_files)} noise files.")
 
-        logger.info("Generating train_manifest.csv...")
-        manager.generate_manifest(output_filename="train_manifest.csv")
+        logger.info("Generating manifest.csv...")
+        manager.generate_manifest(output_filename="multiple_noises_manifest.csv")
 
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)
