@@ -60,3 +60,12 @@ class AudioManager:
         except Exception as e:
             logging.warning(f"Failed to get duration for {path}: {e}")
             return 0.0
+
+    def save_audio(self, path: str | Path, data: np.ndarray, sr: int = 16000):
+        """Saves audio data to the specified path."""
+        path_str = str(path)
+        try:
+            sf.write(path_str, data, sr)
+            logger.info(f"Successfully saved audio to {path_str}")
+        except Exception as e:
+            logger.error(f"Failed to save audio to {path_str}: {e}")
