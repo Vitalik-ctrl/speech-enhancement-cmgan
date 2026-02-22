@@ -1,88 +1,117 @@
 import argparse
-
 import yaml
 import torch
-from enhancement.models.cmgan.generator import TSCNet as Generator
-from enhancement.dataset.loader import get_dataloader
-from enhancement.evaluation.evaluator import ModelEvaluator
-from enhancement.dataset.audio import AudioManager
-from enhancement.evaluation.metrics import SpeechMetrics as MetricsManager
-
+import pandas as pd
+import numpy as np
+import os
 from pathlib import Path
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+from enhancement.models.cmgan.generator import TSCNet as Generator
+from enhancement.dataset.loader import get_dataloader
+from enhancement.evaluation.evaluator import Evaluator
+from enhancement.dataset.audio import AudioManager
+from enhancement.evaluation.metrics import SpeechMetrics as MetricsManager
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
+def save_results_csv(results, csv_path):
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    df = pd.DataFrame(results)
+    df.to_csv(csv_path, index=False)
+    logger.info(f"Evaluation complete. Saved to {csv_path}")
+    logger.info("\n--- Average Scores ---")
+    for col in df.select_dtypes(include=np.number).columns:
+        logger.info(f"Mean {col}: {df[col].mean():.4f}")
+
+
 def main():
-
-    ArgsParser = argparse.ArgumentParser()
-
-    ArgsParser.add_argument("--single", type=str, required=False, help="Flag to evaluate a single audio file instead of the whole dataset")
-    args = ArgsParser.parse_args()
-
-    marked_single = args.single is not None
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--single_clean", type=str, help="Path to clean audio for single testing")
+    parser.add_argument("--single_noise", type=str, help="Path to noise audio for single testing")
+    parser.add_argument("--snr", type=float, default=0.0, help="SNR level for single testing")
+    args = parser.parse_args()
 
     with open("config/metacentrum.yaml", "r") as f:
         config = yaml.safe_load(f)
 
-    logger.info("Open configuration file")
-
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
     logger.info(f"Using device: {device}")
+
     model = Generator().to(device)
-
-    checkpoint_path = "checkpoints/17573210/cmgan_epoch_6.pth"
-
-    logger.info(f"checkpoint_path: {checkpoint_path}")
-
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    checkpoint_path = "checkpoints/17575166/cmgan_epoch_11.pth"
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
 
     workspace_dir = Path(config.get("system", {}).get("workspace", "."))
+    audio_manager = AudioManager(workspace_dir / config.get("paths", {}).get("sph2pipe", ""))
+    dnsmos_model = workspace_dir / config.get("paths", {}).get("dnsmos_model", "models/dnsmos_model.onnx")
+    metrics_manager = MetricsManager(
+        dnsmos_model_path="/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/models/dnsmos_model.onnx")
+    evaluator = Evaluator(config, model, metrics_manager, device)
 
-    sph2pipe_path = workspace_dir / config.get("paths", {}).get("sph2pipe", "")
+    sr = config.get('audio', {}).get('sample_rate', 16000)
+    output_dir = config.get('evaluation', {}).get('output_dir', 'results/enhanced_audio')
+    os.makedirs(output_dir, exist_ok=True)
 
-    audio_manager = AudioManager(sph2pipe_path)
+    if args.single_clean and args.single_noise:
 
-    train_manifest = workspace_dir / config.get("paths", {}).get("train_manifest", "manifest/train.csv")
+        # SINGLE FILE TESTING
+        logger.info(f"Evaluating single mix at {args.snr}dB SNR...")
+        clean_np, _ = audio_manager.load_audio(args.single_clean, target_sr=sr)
+        noise_np, _ = audio_manager.load_audio(args.single_noise, target_sr=sr)
 
-    test_loader  = get_dataloader(config, train_manifest, audio_manager, is_train=False)
+        noisy_np = audio_manager.mix_at_snr(clean_np, noise_np, args.snr)
 
-    logger.info("init metrics manager")
-    dnsmos_model_path = Path(config.get("paths", {}).get("dnsmos_model", "models/dnsmos_model.onnx"))
-    metrics_manager = MetricsManager(dnsmos_model_path=dnsmos_model_path)
+        noisy_tensor = torch.from_numpy(noisy_np.astype(np.float32)).unsqueeze(0)
+        enhanced_np = evaluator.enhance_tensor(noisy_tensor).squeeze(0)
 
-    logger.info("init evaluator")
-    evaluator = ModelEvaluator(
-        config=config,
-        model=model,
-        dataloader=test_loader,
-        metrics_calc=metrics_manager,
-        device=device,
-        audio_manager=audio_manager,
-        manifest_path=train_manifest
-    )
+        metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
+        logger.info(f"Metrics: {metrics}")
 
-    match marked_single:
+        base_name = Path(args.single_clean).stem
+        audio_manager.save_audio(f"{output_dir}/{base_name}_snr{args.snr}_enhanced.wav", enhanced_np, sr)
+        audio_manager.save_audio(f"{output_dir}/{base_name}_snr{args.snr}_noisy.wav", noisy_np, sr)
 
-        # !!! Exemplarily evaluating a single audio file (Hardcoded paths for demonstration)
+    else:
+        # FULL DATASET EVALUATION
+        train_manifest = workspace_dir / config.get("paths", {}).get("train_manifest", "manifest/train.csv")
+        test_loader = get_dataloader(config, train_manifest, audio_manager, is_train=False)
+        manifest_df = pd.read_csv(train_manifest)
+        manifest_df = manifest_df[manifest_df["additive_noise"] == True].reset_index(drop=True)
 
-        case True:
-            logger.info(f"Evaluating single audio file: {args.single}")
-            clean_path = Path(
-                "/auto/projects-du-praha/CTU_Speech_Lab/data/WSJ/wsj1_CDset/disk1/wsj1/si_tr_s/460/460a010a.wv1")
-            noisy_path = Path(
-                "/auto/projects-du-praha/CTU_Speech_Lab/scratch/varhavit/mixed_data/1_single_noise_various_snr/460a010a_CAFE_CAFE_1_0dB.wav")
-            output_path = Path(
-                config.get('evaluation', {}).get('output_dir', 'results/enhanced_audio')) / "460a010a_enhanced.wav"
-            evaluator.evaluate_one(clean_path, noisy_path, output_path)
-        case False:
-            evaluator.evaluate()
+        results = []
+        with torch.no_grad():
+            for i, batch in enumerate(test_loader):
+                if i >= 5: break
+
+                noisy, clean = batch
+                enhanced_waveforms = evaluator.enhance_tensor(noisy)
+
+                enhanced_np = enhanced_waveforms
+                clean_np = clean.cpu().numpy()
+                noisy_np = noisy.cpu().numpy()
+
+                for b in range(noisy.size(0)):
+                    filename = f"batch_{i}_sample_{b}.wav"
+
+                    audio_manager.save_audio(f"{output_dir}/enhanced_{filename}", enhanced_np[b], sr)
+                    audio_manager.save_audio(f"{output_dir}/noisy_{filename}", noisy_np[b], sr)
+
+                    metrics_dict = evaluator.score_pair(clean_np[b], noisy_np[b], enhanced_np[b])
+                    metrics_dict['filename'] = filename
+
+                    global_idx = i * noisy.size(0) + b
+                    if global_idx < len(manifest_df):
+                        row = manifest_df.iloc[global_idx]
+                        metrics_dict.update({'clean_path': row['clean_path'], 'noise_path': row['additive_noise_path'],
+                                             'target_snr_db': row['snr_db']})
+
+                    results.append(metrics_dict)
+
+        metrics_csv = config.get('evaluation', {}).get('metrics_csv', 'results/metrics.csv')
+        save_results_csv(results, metrics_csv)
 
 
 if __name__ == "__main__":
