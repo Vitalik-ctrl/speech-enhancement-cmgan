@@ -98,6 +98,8 @@ def main():
             output_path=f"{output_dir}/{base_name}_attention.png"
         )
 
+        visualizer.log(metrics)
+
     else:
         # FULL DATASET EVALUATION
         eval_manifest = workspace_dir / config.get("paths", {}).get("eval_manifest", "manifest/eval_manifest_wsj.csv")
@@ -109,7 +111,7 @@ def main():
         with torch.no_grad():
             for i, batch in enumerate(test_loader):
 
-                if i >= 15: break
+                if i >= 10: break
 
                 noisy, clean = batch
                 enhanced_waveforms = evaluator.enhance_tensor(noisy)

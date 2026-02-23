@@ -81,6 +81,15 @@ class AudioVisualizer:
         plt.close(fig)
         logger.info(f"Saved attention map to {output_path}")
 
+    def log(self, metrics: dict):
+        """Saves a simple text file with metric values for easy reference."""
+        log_path = Path(metrics.get("output_dir", ".")) / f"{metrics.get('base_name', 'metrics')}_metrics.txt"
+        with open(log_path, "w") as f:
+            for key, value in metrics.items():
+                if key not in ["output_dir", "base_name"]:
+                    f.write(f"{key}: {value}\n")
+        logger.info(f"Saved metrics log to {log_path}")
+
     def generate_all_plots(self, clean: np.ndarray, noisy: np.ndarray, enhanced: np.ndarray, base_name: str,
                            output_dir: str | Path):
         """Generates exactly 7 independent visualization files."""
