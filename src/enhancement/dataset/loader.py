@@ -42,22 +42,21 @@ class ModelDataset(Dataset):
         return audio
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        """Loads the clean and noisy audio segments for the given index, applies necessary processing, and returns them as tensors."""
         row = self.dataframe.iloc[idx]
-
         clean_path = row["clean_path"]
-        noise_path = row["additive_noise_path"]
-        snr_db = float(row["snr_db"])
         target_sr = int(row["sr"])
+
+        random_noise_row = self.dataframe.sample(n=1).iloc[0]
+        noise_path = random_noise_row["additive_noise_path"]
+
+        snr_db = random.uniform(-5.0, 15.0)
 
         clean, sr_clean = self.audio_manager.load_audio(clean_path, target_sr=target_sr)
         noise, sr_noise = self.audio_manager.load_audio(noise_path, target_sr=target_sr)
 
         target_samples = int(self.segment_seconds * target_sr)
         clean_segment = self.extract_random_segment(clean, target_samples)
-
         noisy_segment = self.audio_manager.mix_at_snr(clean_segment, noise, snr_db)
-
         max_amp = np.max(np.abs(noisy_segment)) + 1e-9
         if max_amp > 1.0:
             noisy_segment /= max_amp

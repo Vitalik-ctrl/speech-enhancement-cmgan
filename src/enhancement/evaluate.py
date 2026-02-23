@@ -41,7 +41,7 @@ def main():
     logger.info(f"Using device: {device}")
 
     model = Generator().to(device)
-    checkpoint_path = "checkpoints/17575166/cmgan_epoch_11.pth"
+    checkpoint_path = "/storage/praha5-elixir/home/varhavit/cmgan_checkpoints/17593823.pbs-m1.metacentrum.cz/17593823/cmgan_epoch_14_valG_0.1261.pth"
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
 
     workspace_dir = Path(config.get("system", {}).get("workspace", "."))
@@ -76,15 +76,15 @@ def main():
 
     else:
         # FULL DATASET EVALUATION
-        train_manifest = workspace_dir / config.get("paths", {}).get("train_manifest", "manifest/train.csv")
-        test_loader = get_dataloader(config, train_manifest, audio_manager, is_train=False)
-        manifest_df = pd.read_csv(train_manifest)
+        eval_manifest = workspace_dir / config.get("paths", {}).get("eval_manifest", "manifest/eval_manifest_wsj.csv")
+        test_loader = get_dataloader(config, eval_manifest, audio_manager, is_train=False)
+        manifest_df = pd.read_csv(eval_manifest)
         manifest_df = manifest_df[manifest_df["additive_noise"] == True].reset_index(drop=True)
 
         results = []
         with torch.no_grad():
             for i, batch in enumerate(test_loader):
-                if i >= 5: break
+                if i >= 15: break
 
                 noisy, clean = batch
                 enhanced_waveforms = evaluator.enhance_tensor(noisy)

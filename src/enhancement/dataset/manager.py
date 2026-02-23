@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 import yaml
 
-from .audio import AudioManager
+from audio import AudioManager
 
 logger = logging.getLogger(__name__)
 
@@ -90,28 +90,37 @@ class DatasetManager:
             if duration < self.config['audio']['segment_seconds']:
                 continue
 
-            for snr in self.snr_levels:
+            noise_path = random.choice(noise_files)
+            snr = random.choice(self.snr_levels)
 
-                noise_path = random.choice(noise_files)
-                virtual_mix_id = f"virtual_{clean_path.stem}_{noise_path.stem}_{snr}dB"
+            virtual_mix_id = f"virtual_{clean_path.stem}_{noise_path.stem}_{snr}dB"
 
-                rows.append({
-                    SCHEMA[0]: str(clean_path),
-                    SCHEMA[1]: str(noise_path),
-                    SCHEMA[2]: "",
-                    SCHEMA[3]: virtual_mix_id,
-                    SCHEMA[4]: duration,
-                    SCHEMA[5]: snr,
-                    SCHEMA[6]: True,
-                    SCHEMA[7]: False,
-                    SCHEMA[8]: self.target_sr,
-                    SCHEMA[9]: "on-the-fly"
-                })
+            rows.append({
+                SCHEMA[0]: str(clean_path),
+                SCHEMA[1]: str(noise_path),
+                SCHEMA[2]: "",
+                SCHEMA[3]: virtual_mix_id,
+                SCHEMA[4]: duration,
+                SCHEMA[5]: snr,
+                SCHEMA[6]: True,
+                SCHEMA[7]: False,
+                SCHEMA[8]: self.target_sr,
+                SCHEMA[9]: "on-the-fly"
+            })
 
         logger.info(f"Writing {len(rows)} records to CSV...")
         df = pd.DataFrame(rows, columns=SCHEMA)
-        df.to_csv(manifest_path, index=False)
-        logger.info(f"Manifest successfully saved to {manifest_path}")
+
+        df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+        split_idx = int(len(df) * 0.9)
+        train_df = df.iloc[:split_idx]
+        eval_df = df.iloc[split_idx:]
+
+        train_df.to_csv(self.manifest_dir / "train_manifest_wsj.csv", index=False)
+        eval_df.to_csv(self.manifest_dir / "eval_manifest_wsj.csv", index=False)
+
+        logger.info(f"Saved {len(train_df)} training and {len(eval_df)} evaluation records.")
         return manifest_path
 
 
@@ -123,7 +132,7 @@ if __name__ == "__main__":
 
     config_file = "config/metacentrum.yaml"
 
-    logger.info("--- Starting DatasetManager Test ---")
+    logger.info("--- Starting DatasetManager ---")
     try:
         manager = DatasetManager(config_path=config_file)
 
@@ -131,8 +140,8 @@ if __name__ == "__main__":
         noise_files = manager.get_noise_files()
         logger.info(f"Found {len(clean_files)} clean files and {len(noise_files)} noise files.")
 
-        logger.info("Generating train_manifest.csv...")
-        manager.generate_manifest(output_filename="train_manifest.csv")
+        logger.info("Generating manifest.csv...")
+        manager.generate_manifest(output_filename="multiple_noises_manifest.csv")
 
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)

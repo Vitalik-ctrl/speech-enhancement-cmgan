@@ -8,11 +8,17 @@ paths:
   clean_data:
     - "data/WSJ/wsj1_CDset/disk1/wsj1/si_tr_s"
   noise_data:
-    - "data/additive_noises/Cafe_1.wav"
-    - "data/additive_noises/CAR-NOISE.wav"
+    - "data/additive_noises/QUT_NOISES/CAFE_FOODCOURTB_1"
+    - "data/additive_noises/QUT_NOISES/HOME_KITCHEN_1"
+    - "data/additive_noises/QUT_NOISES/CAFE_CAFE_1"
+    - "data/additive_noises/QUT_NOISES/CAR_WINCLOSED_1"
+    - "data/additive_noises/QUT_NOISES/REVERB_CARPARK_1"
+    - "data/additive_noises/QUT_NOISES/REVERB_POOL_1"
+    - "data/additive_noises/QUT_NOISES/STREET_CITY_1"
+    - "data/additive_noises/QUT_NOISES/STREET_KG_1"
   manifest_dir: "manifest"
-  train_manifest: "manifest/train_mini.csv"
-  eval_manifest: "manifest/train_mini.csv"
+  train_manifest: "manifest/train_manifest_wsj.csv"
+  eval_manifest: "manifest/eval_manifest_wsj.csv"
   dnsmos_model: "models/dnsmos_model.onnx"
   save_dir: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/speech-enhancement-cmgan/checkpoints"
 
@@ -21,15 +27,15 @@ audio:
   n_fft: 400
   hop_length: 100
   segment_seconds: 2.0
-  target_snr: [-5, 0, 5, 10, 15, 20]
+  target_snr: [-5, 0, 5, 10, 15, 20, 30, 40]
 
 training:
-  batch_size: 8
+  batch_size: 16
   num_workers: 4
   pin_memory: true
   loss_weights: [0.1, 0.9, 0.2, 0.05]
-  epochs: 16
-  decay_epoch: 4
+  epochs: 20
+  decay_epoch: 6
   init_lr: 5e-4
 
 model:
