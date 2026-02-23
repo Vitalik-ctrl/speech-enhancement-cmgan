@@ -94,6 +94,8 @@ class Attention(nn.Module):
         self.max_pos_emb = max_pos_emb
         self.rel_pos_emb = nn.Embedding(2 * max_pos_emb + 1, dim_head)
 
+        self.saved_attention = None
+
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x, context=None, mask=None, context_mask=None):
@@ -135,6 +137,9 @@ class Attention(nn.Module):
             dots.masked_fill_(~mask, mask_value)
 
         attn = dots.softmax(dim=-1)
+
+        # !!! Add during evaluation, not during training. Refactor class to differentiate between train and eval modes
+        # self.saved_attention = attn.detach().cpu()
 
         out = einsum("b h i j, b h j d -> b h i d", attn, v)
         out = rearrange(out, "b h n d -> b n (h d)")
