@@ -35,8 +35,8 @@ def main():
 
     audio_manager = AudioManager(sph2pipe_path)
 
-    train_manifest = workspace_dir / config.get("paths", {}).get("train_manifest", "manifest/train.csv")
-    eval_manifest = workspace_dir / config.get("paths", {}).get("eval_manifest", "manifest/train.csv")
+    train_manifest = workspace_dir / config.get("paths", {}).get("train_manifest", "manifest/train_manifest_wsj.csv")
+    eval_manifest = workspace_dir / config.get("paths", {}).get("eval_manifest", "manifest/eval_manifest_wsj.csv")
 
     logger.info("Initializing DataLoaders...")
     train_loader = get_dataloader(config, train_manifest, audio_manager, is_train=True)
