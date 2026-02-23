@@ -151,6 +151,45 @@ class ModelTrainer:
 
         return loss_generator.item(), loss_discriminator.item()
 
+    @torch.no_grad()
+    def eval_step(self, noisy, clean):
+        batch_size = noisy.size(0)
+        one_labels = torch.ones(batch_size).to(self.device)
+
+        gen_outputs = self.forward_generator_step(clean, noisy)
+
+        predict_fake_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
+        gen_loss_GAN = F.mse_loss(predict_fake_metric.flatten(), one_labels.float())
+
+        loss_mag = F.mse_loss(gen_outputs["est_mag"], gen_outputs["clean_mag"])
+        loss_ri = F.mse_loss(gen_outputs["est_real"], gen_outputs["clean_real"]) + \
+                  F.mse_loss(gen_outputs["est_imag"], gen_outputs["clean_imag"])
+
+        time_loss = torch.mean(torch.abs(gen_outputs["est_audio"] - gen_outputs["clean_audio"]))
+
+        loss_generator = (
+                self.loss_weights[0] * loss_ri +
+                self.loss_weights[1] * loss_mag +
+                self.loss_weights[2] * time_loss +
+                self.loss_weights[3] * gen_loss_GAN
+        )
+
+        length = gen_outputs["est_audio"].size(-1)
+        est_audio_list = list(gen_outputs["est_audio"].cpu().numpy())
+        clean_audio_list = list(gen_outputs["clean_audio"].cpu().numpy()[:, :length])
+
+        pesq_score = batch_pesq(clean_audio_list, est_audio_list)
+
+        if pesq_score is not None:
+            predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
+            predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
+
+            loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
+                                 F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
+        else:
+            loss_discriminator = torch.tensor(0.0)
+        return loss_generator.item(), loss_discriminator.item()
+
     def train(self):
         epochs = self.config.get('training', {}).get('epochs', 120)
         log_interval = self.config.get('training', {}).get('log_interval', 100)
@@ -164,22 +203,48 @@ class ModelTrainer:
         os.makedirs(self.save_dir, exist_ok=True)
 
         logger.info(f"Starting training for {epochs} epochs on {self.device}...")
+        logger.info(f"batch_size: {self.config['training']['batch_size']}, "
+                    f"init_lr: {self.config['training']['init_lr']}, "
+                    f"decay_epoch: {self.config['training']['decay_epoch']}, "
+                    f"loss_weights: {self.config['training']['loss_weights']}, "
+                    f"num_workers: {self.config['training']['num_workers']}")
 
         for epoch in range(epochs):
             self.model.train()
             self.discriminator.train()
 
+            logger.info(f"--- Epoch {epoch} Training ---")
             for step, (noisy, clean) in enumerate(self.train_loader):
                 noisy, clean = noisy.to(self.device), clean.to(self.device)
 
                 loss_generator, loss_discriminator = self.train_step(noisy, clean)
 
                 if step % log_interval == 0:
-                    logger.info(f"Epoch {epoch} | Step {step} | Loss G: {loss_generator:.4f} | Loss D: {loss_discriminator:.4f}")
+                    logger.info(
+                        f"Epoch {epoch} | Step {step} | Train Loss G: {loss_generator:.4f} | Train Loss D: {loss_discriminator:.4f}")
+
+            self.model.eval()
+            self.discriminator.eval()
+            eval_gen_loss_total = 0.0
+            eval_disc_loss_total = 0.0
+
+            logger.info(f"--- Epoch {epoch} Evaluation ---")
+            for eval_step_idx, (noisy, clean) in enumerate(self.eval_loader):
+                noisy, clean = noisy.to(self.device), clean.to(self.device)
+
+                val_loss_g, val_loss_d = self.eval_step(noisy, clean)
+                eval_gen_loss_total += val_loss_g
+                eval_disc_loss_total += val_loss_d
+
+            avg_val_loss_g = eval_gen_loss_total / len(self.eval_loader)
+            avg_val_loss_d = eval_disc_loss_total / len(self.eval_loader)
+
+            logger.info(
+                f"Epoch {epoch} Summary | Avg Eval Loss G: {avg_val_loss_g:.4f} | Avg Eval Loss D: {avg_val_loss_d:.4f}")
 
             self.scheduler_generator.step()
             self.scheduler_discriminator.step()
 
-            ckpt_path = os.path.join(self.save_dir, f"cmgan_epoch_{epoch}.pth")
+            ckpt_path = os.path.join(self.save_dir, f"cmgan_epoch_{epoch}_valG_{avg_val_loss_g:.4f}.pth")
             torch.save(self.model.state_dict(), ckpt_path)
             logger.info(f"Saved checkpoint: {ckpt_path}")
