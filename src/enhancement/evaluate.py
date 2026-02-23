@@ -12,6 +12,7 @@ from enhancement.dataset.loader import get_dataloader
 from enhancement.evaluation.evaluator import Evaluator
 from enhancement.dataset.audio import AudioManager
 from enhancement.evaluation.metrics import SpeechMetrics as MetricsManager
+from enhancement.visualisation.visualiser import AudioVisualizer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -47,9 +48,14 @@ def main():
     workspace_dir = Path(config.get("system", {}).get("workspace", "."))
     audio_manager = AudioManager(workspace_dir / config.get("paths", {}).get("sph2pipe", ""))
     dnsmos_model = workspace_dir / config.get("paths", {}).get("dnsmos_model", "models/dnsmos_model.onnx")
-    metrics_manager = MetricsManager(
-        dnsmos_model_path="/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/models/dnsmos_model.onnx")
+    metrics_manager = MetricsManager(dnsmos_model_path=dnsmos_model)
     evaluator = Evaluator(config, model, metrics_manager, device)
+
+    visualizer = AudioVisualizer(
+        sample_rate=16000,
+        n_fft=config.get("audio", {}).get("n_fft", 400),
+        hop_length=config.get("audio", {}).get("hop_length", 100)
+    )
 
     sr = config.get('audio', {}).get('sample_rate', 16000)
     output_dir = config.get('evaluation', {}).get('output_dir', 'results/enhanced_audio')
@@ -67,12 +73,30 @@ def main():
         noisy_tensor = torch.from_numpy(noisy_np.astype(np.float32)).unsqueeze(0)
         enhanced_np = evaluator.enhance_tensor(noisy_tensor).squeeze(0)
 
+        # raw_attn = model.TSCB_4.time_conformer.attn.fn.saved_attention
+        # single_head_matrix = raw_attn[0].mean(dim=0).numpy()
+        # logger.info(f"Attention map: {single_head_matrix}")
+
         metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
         logger.info(f"Metrics: {metrics}")
 
         base_name = Path(args.single_clean).stem
         audio_manager.save_audio(f"{output_dir}/{base_name}_snr{args.snr}_enhanced.wav", enhanced_np, sr)
         audio_manager.save_audio(f"{output_dir}/{base_name}_snr{args.snr}_noisy.wav", noisy_np, sr)
+
+        visualizer.generate_all_plots(
+            clean=clean_np,
+            noisy=noisy_np,
+            enhanced=enhanced_np,
+            base_name=base_name,
+            output_dir=output_dir
+        )
+
+        visualizer.plot_attention_map(
+            single_head_matrix,
+            title="Time-Conformer Self-Attention (Layer 1)",
+            output_path=f"{output_dir}/{base_name}_attention.png"
+        )
 
     else:
         # FULL DATASET EVALUATION
@@ -84,6 +108,7 @@ def main():
         results = []
         with torch.no_grad():
             for i, batch in enumerate(test_loader):
+
                 if i >= 15: break
 
                 noisy, clean = batch

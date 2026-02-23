@@ -81,4 +81,7 @@ class Evaluator:
         metrics_dict['Baseline_PESQ'] = self.metrics_calc.pesq_score(clean_np, noisy_np)
         metrics_dict['Baseline_ESTOI'] = self.metrics_calc.estoi_score(clean_np, noisy_np)
         metrics_dict['Baseline_SNR'] = self.metrics_calc.snr_db(clean_np, noisy_np)
+        metrics_dict['Baseline_DNSMOS_OVRL'] = self.metrics_calc.dnsmos_score(noisy_np)['OVRL'] if self.metrics_calc.dnsmos_session else float('nan')
+        metrics_dict['Baseline_DNSMOS_SIG'] = self.metrics_calc.dnsmos_score(noisy_np)['SIG'] if self.metrics_calc.dnsmos_session else float('nan')
+        metrics_dict['Baseline_DNSMOS_BAK'] = self.metrics_calc.dnsmos_score(noisy_np)['BAK'] if self.metrics_calc.dnsmos_session else float('nan')
         return metrics_dict
