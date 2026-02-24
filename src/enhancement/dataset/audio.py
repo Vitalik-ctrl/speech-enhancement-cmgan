@@ -2,6 +2,7 @@ import subprocess
 import io
 import librosa
 import soundfile as sf
+from scipy.signal import fftconvolve
 import numpy as np
 from pathlib import Path
 from typing import Tuple
@@ -78,6 +79,13 @@ class AudioManager:
         noise = noise * np.sqrt(pn_target / (pn + 1e-12))
 
         return clean + noise
+
+    def apply_rir(self, audio: np.ndarray, rir: np.ndarray) -> np.ndarray:
+        """Convolves audio with a Room Impulse Response (RIR)."""
+        rir = rir / (np.linalg.norm(rir) + 1e-9)
+        reverbed_audio = fftconvolve(audio, rir, mode='full')
+
+        return reverbed_audio[:len(audio)]
 
     def save_audio(self, path: str | Path, data: np.ndarray, sr: int = 16000):
         """Saves audio data to the specified path."""

@@ -5,6 +5,7 @@ from typing import List
 import pandas as pd
 from tqdm import tqdm
 import yaml
+from collections import defaultdict
 
 from audio import AudioManager
 
@@ -39,6 +40,7 @@ class DatasetManager:
 
         self.clean = [self.base_root / p for p in path_config["clean_data"]]
         self.noise = [self.scratch_root / p for p in path_config["noise_data"]]
+        self.rir = [self.scratch_root / p for p in path_config.get("ir_data", [])]
         self.manifest_dir = self.workspace_root / path_config["manifest_dir"]
 
         self.target_sr = self.config['audio']['sample_rate']
@@ -61,13 +63,26 @@ class DatasetManager:
                     files.extend(item.rglob(f"*{ext}"))
         return sorted(files)
 
-    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1')) -> List[Path]:
-        """Recursively gathers clean audio files from configured directories."""
-        return self.get_files(self.clean, extensions)
+    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 60) -> List[Path]:
+        """Recursively gathers clean audio files, limiting the amount taken from each speaker folder."""
+        all_files = self.get_files(self.clean, extensions)
+
+        grouped_files = defaultdict(list)
+        for f in all_files:
+            grouped_files[f.parent].append(f)
+
+        limited_files = []
+        for directory, files in grouped_files.items():
+            limited_files.extend(files[:max_per_dir])
+        return sorted(limited_files)
 
     def get_noise_files(self, extensions: tuple = ('.wav',)) -> List[Path]:
         """Recursively gathers noise audio files from configured directories."""
         return self.get_files(self.noise, extensions)
+
+    def get_impulse_response_files(self, extensions: tuple = ('.wav',)) -> List[Path]:
+        """Recursively gathers impulse response audio files from configured directories."""
+        return self.get_files(self.rir, extensions)
 
     def generate_manifest(self, output_filename: str = "manifest.csv") -> Path:
         """Generates a manifest file containing metadata for all clean and noise audio files."""
@@ -76,11 +91,15 @@ class DatasetManager:
 
         clean_files = self.get_clean_files()
         noise_files = self.get_noise_files()
+        rir_files = self.get_impulse_response_files()
+
 
         if not clean_files:
             logger.warning("No clean audio files found.")
         if not noise_files:
             logger.warning("No noise audio files found.")
+        if not rir_files:
+            logger.warning("No impulse response files found.")
 
         rows = []
 
@@ -91,6 +110,7 @@ class DatasetManager:
                 continue
 
             noise_path = random.choice(noise_files)
+            rir_path = random.choice(rir_files) if rir_files else ""
             snr = random.choice(self.snr_levels)
 
             virtual_mix_id = f"virtual_{clean_path.stem}_{noise_path.stem}_{snr}dB"
@@ -98,12 +118,12 @@ class DatasetManager:
             rows.append({
                 SCHEMA[0]: str(clean_path),
                 SCHEMA[1]: str(noise_path),
-                SCHEMA[2]: "",
+                SCHEMA[2]: str(rir_path),
                 SCHEMA[3]: virtual_mix_id,
                 SCHEMA[4]: duration,
                 SCHEMA[5]: snr,
                 SCHEMA[6]: True,
-                SCHEMA[7]: False,
+                SCHEMA[7]: bool(rir_path),
                 SCHEMA[8]: self.target_sr,
                 SCHEMA[9]: "on-the-fly"
             })
@@ -117,8 +137,8 @@ class DatasetManager:
         train_df = df.iloc[:split_idx]
         eval_df = df.iloc[split_idx:]
 
-        train_df.to_csv(self.manifest_dir / "train_manifest_wsj.csv", index=False)
-        eval_df.to_csv(self.manifest_dir / "eval_manifest_wsj.csv", index=False)
+        train_df.to_csv(self.manifest_dir / f"train_{output_filename}", index=False)
+        eval_df.to_csv(self.manifest_dir / f"eval_{output_filename}", index=False)
 
         logger.info(f"Saved {len(train_df)} training and {len(eval_df)} evaluation records.")
         return manifest_path
@@ -138,10 +158,12 @@ if __name__ == "__main__":
 
         clean_files = manager.get_clean_files()
         noise_files = manager.get_noise_files()
-        logger.info(f"Found {len(clean_files)} clean files and {len(noise_files)} noise files.")
+        impulse_response_files = manager.get_impulse_response_files()
+        logger.info(f"Found {len(clean_files)} clean files, {len(noise_files)} noise files and {len(impulse_response_files)} impulse responses.")
 
-        logger.info("Generating manifest.csv...")
-        manager.generate_manifest(output_filename="multiple_noises_manifest.csv")
+        manifest_name = "manifest_wsj24_02_2026.csv"
+        logger.info(f"Generating {manifest_name}...")
+        # manager.generate_manifest(output_filename=manifest_name)
 
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)
