@@ -36,11 +36,12 @@ class ModelTrainer:
 
         init_lr = float(config["training"]["init_lr"])
         self.optimizer_generator = torch.optim.AdamW(self.model.parameters(), lr=init_lr)
-        self.optimizer_discriminator = torch.optim.AdamW(self.discriminator.parameters(), lr=2 * init_lr)
+        self.optimizer_discriminator = torch.optim.AdamW(self.discriminator.parameters(), lr=1.6 * init_lr)
 
         decay_epoch = config["training"]["decay_epoch"]
         self.scheduler_generator = torch.optim.lr_scheduler.StepLR(self.optimizer_generator, step_size=decay_epoch, gamma=0.5)
         self.scheduler_discriminator = torch.optim.lr_scheduler.StepLR(self.optimizer_discriminator, step_size=decay_epoch, gamma=0.5)
+        self.scaler = torch.cuda.amp.GradScaler()
 
         self.save_dir = config.get('paths', {}).get('save_dir', 'checkpoints')
         os.makedirs(self.save_dir, exist_ok=True)
@@ -108,46 +109,53 @@ class ModelTrainer:
         one_labels = torch.ones(batch_size).to(self.device)
 
         self.optimizer_generator.zero_grad()
-        gen_outputs = self.forward_generator_step(clean, noisy)
+        
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
+            gen_outputs = self.forward_generator_step(clean, noisy)
 
-        predict_fake_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
-        gen_loss_GAN = F.mse_loss(predict_fake_metric.flatten(), one_labels.float())
+            predict_fake_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
+            gen_loss_GAN = F.mse_loss(predict_fake_metric.flatten(), one_labels.float())
 
-        loss_mag = F.mse_loss(gen_outputs["est_mag"], gen_outputs["clean_mag"])
-        loss_ri = F.mse_loss(gen_outputs["est_real"], gen_outputs["clean_real"]) + \
-                  F.mse_loss(gen_outputs["est_imag"], gen_outputs["clean_imag"])
+            loss_mag = F.mse_loss(gen_outputs["est_mag"], gen_outputs["clean_mag"])
+            loss_ri = F.mse_loss(gen_outputs["est_real"], gen_outputs["clean_real"]) + \
+                      F.mse_loss(gen_outputs["est_imag"], gen_outputs["clean_imag"])
 
-        time_loss = torch.mean(torch.abs(gen_outputs["est_audio"] - gen_outputs["clean_audio"]))
+            time_loss = torch.mean(torch.abs(gen_outputs["est_audio"] - gen_outputs["clean_audio"]))
 
-        loss_generator = (
-                self.loss_weights[0] * loss_ri +
-                self.loss_weights[1] * loss_mag +
-                self.loss_weights[2] * time_loss +
-                self.loss_weights[3] * gen_loss_GAN
-        )
+            loss_generator = (
+                    self.loss_weights[0] * loss_ri +
+                    self.loss_weights[1] * loss_mag +
+                    self.loss_weights[2] * time_loss +
+                    self.loss_weights[3] * gen_loss_GAN
+            )
 
-        loss_generator.backward()
-        self.optimizer_generator.step()
+        self.scaler.scale(loss_generator).backward()
+        self.scaler.step(self.optimizer_generator)
 
         self.optimizer_discriminator.zero_grad()
         length = gen_outputs["est_audio"].size(-1)
 
-        est_audio_list = list(gen_outputs["est_audio"].detach().cpu().numpy())
-        clean_audio_list = list(gen_outputs["clean_audio"].cpu().numpy()[:, :length])
+        est_audio_list = list(gen_outputs["est_audio"].detach().float().cpu().numpy())
+        clean_audio_list = list(gen_outputs["clean_audio"].float().cpu().numpy()[:, :length])
 
         pesq_score = batch_pesq(clean_audio_list, est_audio_list)
 
         if pesq_score is not None:
-            predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"].detach())
-            predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
+            pesq_score = torch.tensor(pesq_score, dtype=torch.float32).to(self.device)
+            
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"].detach())
+                predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
 
-            loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
-                     F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
+                loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
+                         F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
 
-            loss_discriminator.backward()
-            self.optimizer_discriminator.step()
+            self.scaler.scale(loss_discriminator).backward()
+            self.scaler.step(self.optimizer_discriminator)
         else:
             loss_discriminator = torch.tensor(0.0)
+
+        self.scaler.update()
 
         return loss_generator.item(), loss_discriminator.item()
 
@@ -156,39 +164,47 @@ class ModelTrainer:
         batch_size = noisy.size(0)
         one_labels = torch.ones(batch_size).to(self.device)
 
-        gen_outputs = self.forward_generator_step(clean, noisy)
+        with torch.autocast(device_type='cuda', dtype=torch.float16):
+            gen_outputs = self.forward_generator_step(clean, noisy)
 
-        predict_fake_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
-        gen_loss_GAN = F.mse_loss(predict_fake_metric.flatten(), one_labels.float())
+            predict_fake_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
+            gen_loss_GAN = F.mse_loss(predict_fake_metric.flatten(), one_labels.float())
 
-        loss_mag = F.mse_loss(gen_outputs["est_mag"], gen_outputs["clean_mag"])
-        loss_ri = F.mse_loss(gen_outputs["est_real"], gen_outputs["clean_real"]) + \
-                  F.mse_loss(gen_outputs["est_imag"], gen_outputs["clean_imag"])
+            loss_mag = F.mse_loss(gen_outputs["est_mag"], gen_outputs["clean_mag"])
+            loss_ri = F.mse_loss(gen_outputs["est_real"], gen_outputs["clean_real"]) + \
+                      F.mse_loss(gen_outputs["est_imag"], gen_outputs["clean_imag"])
 
-        time_loss = torch.mean(torch.abs(gen_outputs["est_audio"] - gen_outputs["clean_audio"]))
+            time_loss = torch.mean(torch.abs(gen_outputs["est_audio"] - gen_outputs["clean_audio"]))
 
-        loss_generator = (
-                self.loss_weights[0] * loss_ri +
-                self.loss_weights[1] * loss_mag +
-                self.loss_weights[2] * time_loss +
-                self.loss_weights[3] * gen_loss_GAN
-        )
+            loss_generator = (
+                    self.loss_weights[0] * loss_ri +
+                    self.loss_weights[1] * loss_mag +
+                    self.loss_weights[2] * time_loss +
+                    self.loss_weights[3] * gen_loss_GAN
+            )
 
         length = gen_outputs["est_audio"].size(-1)
-        est_audio_list = list(gen_outputs["est_audio"].cpu().numpy())
-        clean_audio_list = list(gen_outputs["clean_audio"].cpu().numpy()[:, :length])
+        # Conversion back to float32 for PESQ calculation
+        est_audio_list = list(gen_outputs["est_audio"].float().cpu().numpy())
+        clean_audio_list = list(gen_outputs["clean_audio"].float().cpu().numpy()[:, :length])
 
         pesq_score = batch_pesq(clean_audio_list, est_audio_list)
 
         if pesq_score is not None:
-            predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
-            predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
+            pesq_score = torch.tensor(pesq_score, dtype=torch.float32).to(self.device)
+            logger.info(f"Eval PESQ Score: {pesq_score.item():.4f}")
+            
+            with torch.autocast(device_type='cuda', dtype=torch.float16):
+                predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
+                predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
 
-            loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
-                                 F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
+                loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
+                                     F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
         else:
             loss_discriminator = torch.tensor(0.0)
+            
         return loss_generator.item(), loss_discriminator.item()
+
 
     def train(self):
         epochs = self.config.get('training', {}).get('epochs', 120)
