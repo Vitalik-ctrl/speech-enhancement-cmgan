@@ -18,3 +18,5 @@ __pycache__/
 
 # models data
 checkpoints/
+# evaluation results
+results/
