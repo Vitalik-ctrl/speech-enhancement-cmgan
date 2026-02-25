@@ -80,6 +80,24 @@ class AudioManager:
 
         return clean + noise
 
+    def convolve_at_drr(self, clean: np.ndarray, rir: np.ndarray, drr_db: float) -> np.ndarray:
+        """Convolves clean audio with a Room Impulse Response (RIR) and mixes it
+        to hit a specific Direct-to-Reverberant Ratio (DRR) in decibels."""
+        reverberant = fftconvolve(clean, rir, mode='full')[:len(clean)]
+
+        clean_power = np.mean(clean ** 2) + 1e-12
+        reverb_power = np.mean(reverberant ** 2) + 1e-12
+
+        target_reverb_power = clean_power / (10 ** (drr_db / 10.0))
+        scale_factor = np.sqrt(target_reverb_power / reverb_power)
+        mixed_audio = clean + (reverberant * scale_factor)
+
+        max_val = np.max(np.abs(mixed_audio)) + 1e-9
+        if max_val > 1.0:
+            mixed_audio = mixed_audio / max_val
+
+        return mixed_audio
+
     def apply_rir(self, audio: np.ndarray, rir: np.ndarray) -> np.ndarray:
         """Convolves audio with a Room Impulse Response (RIR)."""
         rir = rir / (np.linalg.norm(rir) + 1e-9)
