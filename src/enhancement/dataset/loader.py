@@ -59,28 +59,29 @@ class ModelDataset(Dataset):
         clean_path = row["clean_path"]
         target_sr = int(row["sr"])
 
-        snr_db = random.uniform(-5.0, 15.0)
+        snr_db = random.uniform(-5.0, 25.0)
 
         clean, _ = self.audio_manager.load_audio(clean_path, target_sr=target_sr)
         target_samples = int(self.segment_seconds * target_sr)
         clean_segment = self.extract_random_segment(clean, target_samples)
         audio_mix = clean_segment.copy()
 
-        available_scenarios = [MixScenario.ADDITIVE]
         if hasattr(self, 'rir_paths') and self.rir_paths:
-            logger.info(f"RIR paths available: {len(self.rir_paths)}")
-            available_scenarios.extend([MixScenario.CONVOLUTIONAL, MixScenario.BOTH])
-
-        mix_scenario = random.choice(available_scenarios)
+            if random.random() < 0.5:
+                mix_scenario = MixScenario.ADDITIVE
+            else:
+                mix_scenario = random.choice([MixScenario.CONVOLUTIONAL, MixScenario.BOTH])
+        else:
+            mix_scenario = MixScenario.ADDITIVE
 
         if mix_scenario in [MixScenario.CONVOLUTIONAL, MixScenario.BOTH]:
-            logger.info(f"Applying convolutional noise using RIR")
             random_rir_path = random.choice(self.rir_paths)
             rir, _ = self.audio_manager.load_audio(random_rir_path, target_sr=target_sr)
-            audio_mix = self.audio_manager.apply_rir(audio_mix, rir)
+            wet_audio = self.audio_manager.apply_rir(audio_mix, rir)
+            wet_ratio = random.uniform(0.1, 1.0)
+            audio_mix = (1.0 - wet_ratio) * audio_mix + (wet_ratio * wet_audio)
 
         if mix_scenario in [MixScenario.ADDITIVE, MixScenario.BOTH]:
-            logger.info(f"Applying additive noise at {snr_db:.2f} dB SNR using noise")
             random_noise_path = random.choice(self.noise_paths)
             noise, _ = self.audio_manager.load_audio(random_noise_path, target_sr=target_sr)
             noise_segment = self.extract_random_segment(noise, target_samples)

@@ -133,7 +133,7 @@ class DatasetManager:
 
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-        split_idx = int(len(df) * 0.9)
+        split_idx = int(len(df) * 0.1)
         train_df = df.iloc[:split_idx]
         eval_df = df.iloc[split_idx:]
 
@@ -161,9 +161,9 @@ if __name__ == "__main__":
         impulse_response_files = manager.get_impulse_response_files()
         logger.info(f"Found {len(clean_files)} clean files, {len(noise_files)} noise files and {len(impulse_response_files)} impulse responses.")
 
-        manifest_name = "manifest_wsj24_02_2026.csv"
+        manifest_name = "manifest_wsj04_03_2026.csv"
         logger.info(f"Generating {manifest_name}...")
-        # manager.generate_manifest(output_filename=manifest_name)
+        manager.generate_manifest(output_filename=manifest_name)
 
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)
