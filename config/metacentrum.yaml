@@ -7,6 +7,8 @@ paths:
   sph2pipe: "tools/sph2pipe/sph2pipe"
   clean_data:
     - "data/WSJ/wsj1/si_tr_s"
+    - "data2/timit/timit/train/dr1"
+    - "data/CtuTest/SHORT/"
   noise_data:
     - "data/additive_noises/QUT_NOISES/CAFE_FOODCOURTB_1"
     - "data/additive_noises/QUT_NOISES/HOME_KITCHEN_1"
@@ -17,11 +19,21 @@ paths:
     - "data/additive_noises/QUT_NOISES/STREET_CITY_1"
     - "data/additive_noises/QUT_NOISES/STREET_KG_1"
     - "data/additive_noises/QUT_NOISES/CAR_WINUPB_1"
+    - "data/additive_noises/QUT_NOISES/CAFE_CAFE_2"
+    - "data/additive_noises/QUT_NOISES/CAFE_FOODCOURTB_2"
+    - "data/additive_noises/QUT_NOISES/CAR_WINDOWNB_2"
+    - "data/additive_noises/QUT_NOISES/CAR_WINUPB_2"
+    - "data/additive_noises/QUT_NOISES/HOME_KITCHEN_2"
+    - "data/additive_noises/QUT_NOISES/HOME_LIVINGB_2"
+    - "data/additive_noises/QUT_NOISES/REVERB_CARPARK_2"
+    - "data/additive_noises/QUT_NOISES/REVERB_POOL_2"
+    - "data/additive_noises/QUT_NOISES/STREET_CITY_2"
+    - "data/additive_noises/QUT_NOISES/STREET_KG_2"
   ir_data:
     - "data/convolutional_noises"
   manifest_dir: "manifest"
-  train_manifest: "manifest/train_manifest_wsj24_02_2026.csv"
-  eval_manifest: "manifest/eval_manifest_wsj24_02_2026.csv"
+  train_manifest: "manifest/train_manifest_wsj07_03_2026.csv"
+  eval_manifest: "manifest/eval_manifest_wsj07_03_2026.csv"
   dnsmos_model: "models/dnsmos_model.onnx"
   save_dir: "/auto/projects-du-praha/CTU_Speech_Lab/workspace/varhavit/speech-enhancement-cmgan/checkpoints"
 

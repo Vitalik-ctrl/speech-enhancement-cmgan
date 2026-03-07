@@ -63,7 +63,7 @@ class DatasetManager:
                     files.extend(item.rglob(f"*{ext}"))
         return sorted(files)
 
-    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 60) -> List[Path]:
+    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 90) -> List[Path]:
         """Recursively gathers clean audio files, limiting the amount taken from each speaker folder."""
         all_files = self.get_files(self.clean, extensions)
 
@@ -133,7 +133,7 @@ class DatasetManager:
 
         df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
-        split_idx = int(len(df) * 0.1)
+        split_idx = int(len(df) * 0.9)
         train_df = df.iloc[:split_idx]
         eval_df = df.iloc[split_idx:]
 
@@ -161,7 +161,7 @@ if __name__ == "__main__":
         impulse_response_files = manager.get_impulse_response_files()
         logger.info(f"Found {len(clean_files)} clean files, {len(noise_files)} noise files and {len(impulse_response_files)} impulse responses.")
 
-        manifest_name = "manifest_wsj04_03_2026.csv"
+        manifest_name = "manifest_wsj07_03_2026.csv"
         logger.info(f"Generating {manifest_name}...")
         manager.generate_manifest(output_filename=manifest_name)
 
