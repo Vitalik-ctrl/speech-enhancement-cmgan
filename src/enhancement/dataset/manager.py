@@ -17,12 +17,11 @@ SCHEMA = [
     "convolutional_noise", "sr", "remarks"
 ]
 
+
 class DatasetManager:
     """Manages dataset paths, gathers audio files, and generates a manifest for training."""
 
     def __init__(self, config_path: str | Path):
-        """Initializes the DatasetManager with a configuration file.
-        :param config_path: Path to the YAML configuration file containing dataset parameters."""
         self.config_path = Path(config_path)
 
         with open(self.config_path, 'r') as f:
@@ -38,17 +37,20 @@ class DatasetManager:
         self.sph2pipe_path = self.workspace_root / path_config["sph2pipe"]
         self.audio_manager = AudioManager(sph2pipe_path=str(self.sph2pipe_path))
 
-        self.clean = [self.base_root / p for p in path_config["clean_data"]]
-        self.noise = [self.scratch_root / p for p in path_config["noise_data"]]
-        self.rir = [self.scratch_root / p for p in path_config.get("ir_data", [])]
-        self.manifest_dir = self.workspace_root / path_config["manifest_dir"]
+        clean_paths = path_config.get("clean_data") or []
+        self.clean = [self.base_root / p for p in clean_paths]
 
+        noise_paths = path_config.get("noise_data") or []
+        self.noise = [self.scratch_root / p for p in noise_paths]
+
+        ir_paths = path_config.get("ir_data") or []
+        self.rir = [self.scratch_root / p for p in ir_paths]
+
+        self.manifest_dir = self.workspace_root / path_config["manifest_dir"]
         self.target_sr = self.config['audio']['sample_rate']
         self.snr_levels = self.config['audio']['target_snr']
 
-
     def get_files(self, source: List[Path], extensions: tuple = ('.wav', '.wv1')) -> List[Path]:
-        """Recursively gathers all audio files from clean and noise directories."""
         files = []
         for item in source:
             if not item.exists():
@@ -63,8 +65,7 @@ class DatasetManager:
                     files.extend(item.rglob(f"*{ext}"))
         return sorted(files)
 
-    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 60) -> List[Path]:
-        """Recursively gathers clean audio files, limiting the amount taken from each speaker folder."""
+    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 100) -> List[Path]:
         all_files = self.get_files(self.clean, extensions)
 
         grouped_files = defaultdict(list)
@@ -77,15 +78,12 @@ class DatasetManager:
         return sorted(limited_files)
 
     def get_noise_files(self, extensions: tuple = ('.wav',)) -> List[Path]:
-        """Recursively gathers noise audio files from configured directories."""
         return self.get_files(self.noise, extensions)
 
     def get_impulse_response_files(self, extensions: tuple = ('.wav',)) -> List[Path]:
-        """Recursively gathers impulse response audio files from configured directories."""
         return self.get_files(self.rir, extensions)
 
     def generate_manifest(self, output_filename: str = "manifest.csv") -> Path:
-        """Generates a manifest file containing metadata for all clean and noise audio files."""
         self.manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = self.manifest_dir / output_filename
 
@@ -93,13 +91,26 @@ class DatasetManager:
         noise_files = self.get_noise_files()
         rir_files = self.get_impulse_response_files()
 
-
         if not clean_files:
-            logger.warning("No clean audio files found.")
-        if not noise_files:
-            logger.warning("No noise audio files found.")
-        if not rir_files:
-            logger.warning("No impulse response files found.")
+            logger.warning("No clean audio files found. Generating manifest will likely fail or be empty.")
+
+        valid_mix_types = []
+        if noise_files:
+            valid_mix_types.append("additive")
+        else:
+            logger.warning("No additive noise files found. Proceeding without additive noise.")
+
+        if rir_files:
+            valid_mix_types.append("reverberation")
+        else:
+            logger.warning("No impulse response files found. Proceeding without reverberation.")
+
+        if noise_files and rir_files:
+            valid_mix_types.append("both")
+
+        if not valid_mix_types:
+            valid_mix_types.append("clean")
+            logger.warning("No noise or reverb files found. Generating manifest with pure clean audio only.")
 
         rows = []
 
@@ -109,11 +120,18 @@ class DatasetManager:
             if duration < self.config['audio']['segment_seconds']:
                 continue
 
-            noise_path = random.choice(noise_files)
-            rir_path = random.choice(rir_files) if rir_files else ""
             snr = random.choice(self.snr_levels)
 
-            virtual_mix_id = f"virtual_{clean_path.stem}_{noise_path.stem}_{snr}dB"
+            mix_type = random.choice(valid_mix_types)
+
+            is_add = mix_type in ["additive", "both"]
+            is_rev = mix_type in ["reverberation", "both"]
+
+            noise_path = random.choice(noise_files) if is_add and noise_files else ""
+            rir_path = random.choice(rir_files) if is_rev and rir_files else ""
+
+            noise_stem = noise_path.stem if hasattr(noise_path, 'stem') else "none"
+            virtual_mix_id = f"virtual_{clean_path.stem}_{noise_stem}_{snr}dB"
 
             rows.append({
                 SCHEMA[0]: str(clean_path),
@@ -122,8 +140,8 @@ class DatasetManager:
                 SCHEMA[3]: virtual_mix_id,
                 SCHEMA[4]: duration,
                 SCHEMA[5]: snr,
-                SCHEMA[6]: True,
-                SCHEMA[7]: bool(rir_path),
+                SCHEMA[6]: is_add,
+                SCHEMA[7]: is_rev,
                 SCHEMA[8]: self.target_sr,
                 SCHEMA[9]: "on-the-fly"
             })
@@ -159,11 +177,12 @@ if __name__ == "__main__":
         clean_files = manager.get_clean_files()
         noise_files = manager.get_noise_files()
         impulse_response_files = manager.get_impulse_response_files()
-        logger.info(f"Found {len(clean_files)} clean files, {len(noise_files)} noise files and {len(impulse_response_files)} impulse responses.")
+        logger.info(
+            f"Found {len(clean_files)} clean files, {len(noise_files)} noise files and {len(impulse_response_files)} impulse responses.")
 
-        manifest_name = "manifest_wsj24_02_2026.csv"
+        manifest_name = "manifest_mix_source_rir_only_06_04_2026.csv"
         logger.info(f"Generating {manifest_name}...")
-        # manager.generate_manifest(output_filename=manifest_name)
+        manager.generate_manifest(output_filename=manifest_name)
 
     except Exception as e:
         logger.error(f"Test failed: {e}", exc_info=True)
