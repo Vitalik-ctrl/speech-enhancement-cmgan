@@ -65,21 +65,28 @@ class DatasetManager:
                     files.extend(item.rglob(f"*{ext}"))
         return sorted(files)
 
-<<<<<<< HEAD
-    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 100) -> List[Path]:
-=======
-    def get_clean_files(self, extensions: tuple = ('.wav', '.wv1'), max_per_dir: int = 90) -> List[Path]:
+    def get_clean_files(self, extensions: tuple = ('.wav', '.WAV', '.wv1'), max_per_dir: int = 95) -> List[Path]:
         """Recursively gathers clean audio files, limiting the amount taken from each speaker folder."""
->>>>>>> refactor/training-routine
         all_files = self.get_files(self.clean, extensions)
 
         grouped_files = defaultdict(list)
         for f in all_files:
             grouped_files[f.parent].append(f)
 
+        source_counts: dict[Path, int] = defaultdict(int)
         limited_files = []
         for directory, files in grouped_files.items():
-            limited_files.extend(files[:max_per_dir])
+            capped = files[:max_per_dir]
+            limited_files.extend(capped)
+            for source in self.clean:
+                try:
+                    directory.relative_to(source)
+                    source_counts[source] += len(capped)
+                    break
+                except ValueError:
+                    continue
+
+        self._clean_source_counts = dict(source_counts)  # stash for logging
         return sorted(limited_files)
 
     def get_noise_files(self, extensions: tuple = ('.wav',)) -> List[Path]:
@@ -180,16 +187,16 @@ if __name__ == "__main__":
         manager = DatasetManager(config_path=config_file)
 
         clean_files = manager.get_clean_files()
+        for source, count in manager._clean_source_counts.items():
+            logger.info(f"  {source.relative_to(manager.base_root)}: {count} files")
+        logger.info(f"Found {len(clean_files)} clean files total")
         noise_files = manager.get_noise_files()
         impulse_response_files = manager.get_impulse_response_files()
         logger.info(
-            f"Found {len(clean_files)} clean files, {len(noise_files)} noise files and {len(impulse_response_files)} impulse responses.")
+            f"Found {len(clean_files)} clean files, {len(noise_files)} noise files \
+            and {len(impulse_response_files)} impulse responses.")
 
-<<<<<<< HEAD
-        manifest_name = "manifest_mix_source_rir_only_06_04_2026.csv"
-=======
-        manifest_name = "manifest_wsj07_03_2026.csv"
->>>>>>> refactor/training-routine
+        manifest_name = "manifest_cz_30_04_2026.csv"
         logger.info(f"Generating {manifest_name}...")
         manager.generate_manifest(output_filename=manifest_name)
 

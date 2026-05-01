@@ -6,9 +6,11 @@ system:
 paths:
   sph2pipe: "tools/sph2pipe/sph2pipe"
   clean_data:
-    - "data/WSJ/wsj1/si_tr_s"
-    - "data2/timit/timit/train"
+#    - "data/WSJ/wsj1/si_tr_s"
+#    - "data2/timit/timit/train"
     - "data/CtuTest/SHORT/"
+    - "data/GLOBALPHONE/CZ/adc"
+    - "data/cedmo/SPEECON/WAV/ADULT1CS"
   noise_data:
      - "data/additive_noises/QUT_NOISES"
   ir_data:
@@ -28,7 +30,7 @@ audio:
   target_snr: [-5, 0, 5, 10, 15, 20, 30, 40]
 
 training:
-  batch_size: 4
+  batch_size: 12
   num_workers: 4
   pin_memory: true
   loss_weights: [0.1, 0.9, 0.2, 0.05]

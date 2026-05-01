@@ -49,15 +49,15 @@ def evaluate_single_additive(args, audio_manager, evaluator, visualizer, sr, out
     noisy_tensor = torch.from_numpy(noisy_np.astype(np.float32)).unsqueeze(0)
     enhanced_np = evaluator.enhance_tensor(noisy_tensor).squeeze(0)
 
-    metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
-    logger.info(f"Metrics: {metrics}")
+    # metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
+    # logger.info(f"Metrics: {metrics}")
 
     base_name = Path(args.single_clean).stem
     audio_manager.save_audio(f"{output_dir}/{base_name}_snr{args.snr}_enhanced.wav", enhanced_np, sr)
     audio_manager.save_audio(f"{output_dir}/{base_name}_snr{args.snr}_noisy.wav", noisy_np, sr)
 
-    visualizer.generate_all_plots(clean_np, noisy_np, enhanced_np, base_name, output_dir)
-    visualizer.log(metrics, path=output_dir)
+    # visualizer.generate_all_plots(clean_np, noisy_np, enhanced_np, base_name, output_dir)
+    # visualizer.log(metrics, path=output_dir)
 
 
 def evaluate_single_reverb(args, audio_manager, evaluator, visualizer, sr, output_dir):
@@ -69,15 +69,15 @@ def evaluate_single_reverb(args, audio_manager, evaluator, visualizer, sr, outpu
     noisy_tensor = torch.from_numpy(noisy_np.astype(np.float32)).unsqueeze(0)
     enhanced_np = evaluator.enhance_tensor(noisy_tensor).squeeze(0)
 
-    metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
-    logger.info(f"Metrics: {metrics}")
+    # metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
+    # logger.info(f"Metrics: {metrics}")
 
     base_name = f"{Path(args.single_clean).stem}_reverb_drr{args.snr}"
     audio_manager.save_audio(f"{output_dir}/{base_name}_enhanced.wav", enhanced_np, sr)
     audio_manager.save_audio(f"{output_dir}/{base_name}_noisy.wav", noisy_np, sr)
 
-    visualizer.generate_all_plots(clean_np, noisy_np, enhanced_np, base_name, output_dir)
-    visualizer.log(metrics, path=output_dir)
+    # visualizer.generate_all_plots(clean_np, noisy_np, enhanced_np, base_name, output_dir)
+    # visualizer.log(metrics, path=output_dir)
 
 
 def evaluate_dataset(config, audio_manager, evaluator, output_dir, sr, pesq_only=False, fast_mode=False):
@@ -220,15 +220,15 @@ def evaluate_single_joint(args, audio_manager, evaluator, visualizer, sr, output
     noisy_tensor = torch.from_numpy(noisy_np.astype(np.float32)).unsqueeze(0)
     enhanced_np = evaluator.enhance_tensor(noisy_tensor).squeeze(0)
 
-    metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
-    logger.info(f"Joint Metrics: {metrics}")
+    # metrics = evaluator.score_pair(clean_np, noisy_np, enhanced_np)
+    # logger.info(f"Joint Metrics: {metrics}")
 
     base_name = f"{Path(args.single_clean).stem}_joint_snr{args.snr}"
     audio_manager.save_audio(f"{output_dir}/{base_name}_enhanced.wav", enhanced_np, sr)
     audio_manager.save_audio(f"{output_dir}/{base_name}_noisy.wav", noisy_np, sr)
 
-    visualizer.generate_all_plots(clean_np, noisy_np, enhanced_np, base_name, output_dir)
-    visualizer.log(metrics, path=output_dir)
+    # visualizer.generate_all_plots(clean_np, noisy_np, enhanced_np, base_name, output_dir)
+    # visualizer.log(metrics, path=output_dir)
 
 
 def main():

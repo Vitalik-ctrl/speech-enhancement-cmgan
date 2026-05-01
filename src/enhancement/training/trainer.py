@@ -11,6 +11,7 @@ from enhancement.models.cmgan.utils import power_compress, power_uncompress
 
 logger = logging.getLogger(__name__)
 
+
 class ModelTrainer:
 
     def __init__(self, config: dict, train_loader: DataLoader, validation_loader: DataLoader, device: torch.device):
@@ -39,8 +40,10 @@ class ModelTrainer:
         self.optimizer_discriminator = torch.optim.AdamW(self.discriminator.parameters(), lr=1.6 * init_lr)
 
         decay_epoch = config["training"]["decay_epoch"]
-        self.scheduler_generator = torch.optim.lr_scheduler.StepLR(self.optimizer_generator, step_size=decay_epoch, gamma=0.5)
-        self.scheduler_discriminator = torch.optim.lr_scheduler.StepLR(self.optimizer_discriminator, step_size=decay_epoch, gamma=0.5)
+        self.scheduler_generator = torch.optim.lr_scheduler.StepLR(self.optimizer_generator, step_size=decay_epoch,
+                                                                   gamma=0.5)
+        self.scheduler_discriminator = torch.optim.lr_scheduler.StepLR(self.optimizer_discriminator,
+                                                                       step_size=decay_epoch, gamma=0.5)
         self.scaler = torch.cuda.amp.GradScaler()
 
         self.save_dir = config.get('paths', {}).get('save_dir', 'checkpoints')
@@ -109,7 +112,7 @@ class ModelTrainer:
         one_labels = torch.ones(batch_size).to(self.device)
 
         self.optimizer_generator.zero_grad()
-        
+
         with torch.autocast(device_type='cuda', dtype=torch.float16):
             gen_outputs = self.forward_generator_step(clean, noisy)
 
@@ -142,13 +145,13 @@ class ModelTrainer:
 
         if pesq_score is not None:
             pesq_score = torch.tensor(pesq_score, dtype=torch.float32).to(self.device)
-            
+
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"].detach())
                 predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
 
                 loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
-                         F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
+                                     F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
 
             self.scaler.scale(loss_discriminator).backward()
             self.scaler.step(self.optimizer_discriminator)
@@ -206,7 +209,6 @@ class ModelTrainer:
             loss_discriminator = torch.tensor(0.0)
 
         return loss_generator.item(), loss_discriminator.item(), current_batch_pesq
-
 
     def train(self):
         epochs = self.config.get('training', {}).get('epochs', 120)
