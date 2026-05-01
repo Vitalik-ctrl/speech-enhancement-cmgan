@@ -190,20 +190,22 @@ class ModelTrainer:
 
         pesq_score = batch_pesq(clean_audio_list, est_audio_list)
 
+        current_batch_pesq = 0.0
+
         if pesq_score is not None:
-            pesq_score = torch.tensor(pesq_score, dtype=torch.float32).to(self.device)
-            logger.info(f"Eval PESQ Score: {pesq_score.item():.4f}")
-            
+            pesq_tensor = torch.tensor(pesq_score, dtype=torch.float32, device=self.device).clone().detach()
+            current_batch_pesq = pesq_tensor.mean().item()
+
             with torch.autocast(device_type='cuda', dtype=torch.float16):
                 predict_enhance_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["est_mag"])
                 predict_max_metric = self.discriminator(gen_outputs["clean_mag"], gen_outputs["clean_mag"])
 
                 loss_discriminator = F.mse_loss(predict_max_metric.flatten(), one_labels) + \
-                                     F.mse_loss(predict_enhance_metric.flatten(), pesq_score)
+                                     F.mse_loss(predict_enhance_metric.flatten(), pesq_tensor)
         else:
             loss_discriminator = torch.tensor(0.0)
-            
-        return loss_generator.item(), loss_discriminator.item()
+
+        return loss_generator.item(), loss_discriminator.item(), current_batch_pesq
 
 
     def train(self):
@@ -243,20 +245,25 @@ class ModelTrainer:
             self.discriminator.eval()
             eval_gen_loss_total = 0.0
             eval_disc_loss_total = 0.0
+            eval_pesq_total = 0.0
 
             logger.info(f"--- Epoch {epoch} Evaluation ---")
             for eval_step_idx, (noisy, clean) in enumerate(self.eval_loader):
                 noisy, clean = noisy.to(self.device), clean.to(self.device)
 
-                val_loss_g, val_loss_d = self.eval_step(noisy, clean)
+                val_loss_g, val_loss_d, val_pesq = self.eval_step(noisy, clean)
+
                 eval_gen_loss_total += val_loss_g
                 eval_disc_loss_total += val_loss_d
+                eval_pesq_total += val_pesq
 
             avg_val_loss_g = eval_gen_loss_total / len(self.eval_loader)
             avg_val_loss_d = eval_disc_loss_total / len(self.eval_loader)
+            avg_val_pesq = eval_pesq_total / len(self.eval_loader)
 
             logger.info(
-                f"Epoch {epoch} Summary | Avg Eval Loss G: {avg_val_loss_g:.4f} | Avg Eval Loss D: {avg_val_loss_d:.4f}")
+                f"Epoch {epoch} Summary | Avg Eval Loss G: {avg_val_loss_g:.4f} | Avg Eval Loss D: {avg_val_loss_d:.4f} | Avg Eval PESQ: {avg_val_pesq:.4f}"
+            )
 
             self.scheduler_generator.step()
             self.scheduler_discriminator.step()

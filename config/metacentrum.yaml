@@ -28,7 +28,7 @@ audio:
   target_snr: [-5, 0, 5, 10, 15, 20, 30, 40]
 
 training:
-  batch_size: 8
+  batch_size: 4
   num_workers: 4
   pin_memory: true
   loss_weights: [0.1, 0.9, 0.2, 0.05]

@@ -60,9 +60,6 @@ class AudioVisualizer:
         ax.set_ylabel("Frequency (Hz)", fontsize=24)
         ax.tick_params(axis='both', which='major', labelsize=20)
 
-        # cbar = fig.colorbar(im, ax=ax, format='%+2.0f dB')
-        # cbar.set_label('Magnitude (dB)', fontsize=12)
-
         plt.tight_layout()
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
@@ -138,9 +135,9 @@ class AudioVisualizer:
         plt.close(fig)
         logger.info(f"Saved attention map to {output_path}")
 
-    def log(self, metrics: dict):
+    def log(self, metrics: dict, path: str | Path):
         """Saves a simple text file with metric values for easy reference."""
-        log_path = Path(metrics.get("output_dir", ".")) / f"{metrics.get('base_name', 'metrics')}_metrics.txt"
+        log_path = f"{path}/{metrics.get('base_name', 'metrics')}_metrics.txt"
         with open(log_path, "w") as f:
             for key, value in metrics.items():
                 if key not in ["output_dir", "base_name"]:
@@ -171,3 +168,29 @@ class AudioVisualizer:
                 "Spectrogram Error Map",
                 out_dir / f"{base_name}_error_map.png"
             )
+
+    def plot_checkpoint_trend(self, epoch_stats: list[dict], output_path: str | Path):
+        """Plots the PESQ improvement trend with a variance band over epochs."""
+        if not epoch_stats:
+            logger.warning("No epoch statistics provided to plot.")
+            return
+
+        epochs = [s['epoch'] for s in epoch_stats]
+        means = [s['mean_pesq'] for s in epoch_stats]
+        maxs = [s['max_pesq'] for s in epoch_stats]
+        mins = [s['min_pesq'] for s in epoch_stats]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(epochs, means, label='Mean PESQ', color='blue', linewidth=2)
+        ax.fill_between(epochs, mins, maxs, color='blue', alpha=0.2, label='Min/Max Range')
+
+        ax.set_title('PESQ Improvement Over Epochs', fontsize=14)
+        ax.set_xlabel('Epoch', fontsize=12)
+        ax.set_ylabel('PESQ_WB', fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.legend()
+
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        plt.close(fig)
+        logger.info(f"Saved checkpoint trend plot to {output_path}")

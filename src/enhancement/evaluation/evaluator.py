@@ -43,13 +43,14 @@ class Evaluator:
         final_audio = np.concatenate(enhanced_chunks, axis=-1)
         return final_audio
 
-    def _forward_pass(self, noisy_tensor: torch.Tensor) -> np.ndarray:
-        """The core mathematical forward pass (for a single chunk)."""
-        with torch.no_grad():
-            noisy_tensor = noisy_tensor.to(self.device)
+    def _forward_pass(self, noisy_batch: torch.Tensor) -> np.ndarray:
+        """Processes an entire batch of audio at once on the GPU."""
+        with torch.no_grad(), torch.autocast(device_type='cuda',
+                                             dtype=torch.float16 if torch.cuda.is_available() else torch.float32):
+            noisy_batch = noisy_batch.to(self.device)
 
-            c = torch.sqrt(noisy_tensor.size(-1) / torch.sum((noisy_tensor ** 2.0), dim=-1, keepdim=True))
-            noisy_norm = noisy_tensor * c
+            c = torch.sqrt(noisy_batch.size(-1) / torch.sum((noisy_batch ** 2.0), dim=-1, keepdim=True))
+            noisy_norm = noisy_batch * c
 
             noisy_spec = torch.stft(noisy_norm, self.n_fft, self.hop, window=self.window, onesided=True,
                                     return_complex=True)
@@ -65,18 +66,25 @@ class Evaluator:
             est_audio = torch.istft(est_spec_complex.transpose(1, 2), self.n_fft, self.hop, window=self.window,
                                     onesided=True)
 
-            enhanced_waveforms = est_audio / c
+            enhanced_waveforms = (est_audio / c).float()
             enhanced_np = enhanced_waveforms.cpu().numpy()
 
-            for b in range(enhanced_np.shape[0]):
-                peak = np.max(np.abs(enhanced_np[b]))
-                if peak > 1.0:
-                    enhanced_np[b] = enhanced_np[b] / peak
+            peaks = np.max(np.abs(enhanced_np), axis=-1, keepdims=True)
+            mask = peaks > 1.0
+            enhanced_np = np.where(mask, enhanced_np / np.where(mask, peaks, 1.0), enhanced_np)
 
         return enhanced_np
 
-    def score_pair(self, clean_np: np.ndarray, noisy_np: np.ndarray, enhanced_np: np.ndarray) -> dict:
-        """Calculates all metrics comparing clean to enhanced, and baseline (clean to noisy)."""
+    def score_pair(self, clean_np: np.ndarray, noisy_np: np.ndarray, enhanced_np: np.ndarray,
+                   fast_pesq_only: bool = False) -> dict:
+        """Calculates metrics. Can skip heavy neural net metrics if fast_pesq_only is True."""
+
+        if fast_pesq_only:
+            return {
+                'PESQ_WB': self.metrics_calc.pesq_score(clean_np, enhanced_np),
+                'Baseline_PESQ': self.metrics_calc.pesq_score(clean_np, noisy_np)
+            }
+
         metrics_dict = self.metrics_calc.compute_all(clean_np, enhanced_np)
         metrics_dict['Baseline_PESQ'] = self.metrics_calc.pesq_score(clean_np, noisy_np)
         metrics_dict['Baseline_ESTOI'] = self.metrics_calc.estoi_score(clean_np, noisy_np)
